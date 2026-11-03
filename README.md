@@ -1,2 +1,9 @@
-# ledger-web
-Mobile Chinese bookkeeping PWA (local IndexedDB)
+# 记账本（PWA）
+纯前端离线记账，数据存 IndexedDB（镜像 localStorage）。
+## iPhone 安装
+1. 用 **Safari** 打开网址（必须 https）
+2. 点底部「分享」→「添加到主屏幕」→ 添加
+3. 从主屏幕图标打开，离线可用
+## 注意
+- 主屏幕版与 Safari 网页版数据各自独立；请固定用主屏幕版。
+- iOS 可能清理长期不用的网站数据，请在「备份」页定期「导出 JSON」，换机后「导入 JSON」。

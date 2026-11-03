@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="记账本">
+<meta name="theme-color" content="#16a34a"><link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg"><link rel="icon" href="icon.svg"><title>记账本</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{margin:0;font-family:-apple-system,"PingFang SC",sans-serif;background:#f2f2f7;color:#111;padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(80px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+header{padding:14px 16px;font-size:22px;font-weight:700}.card{background:#fff;border-radius:14px;margin:10px 12px;padding:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:6px}.grid b{display:block;font-size:18px;margin-top:4px}
+.in{color:#16a34a}.out{color:#dc2626}h3{margin:0 0 8px;font-size:15px;color:#666}
+input,select,button{font-size:17px;min-height:46px;border-radius:10px;border:1px solid #ddd;padding:0 12px;width:100%;background:#fff}
+.row{display:flex;gap:8px;margin-bottom:8px}.seg button{flex:1}.seg .on{background:#16a34a;color:#fff;border-color:#16a34a}
+.primary{background:#16a34a;color:#fff;border:0;font-weight:600}.rec{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee}
+.rec small{color:#888}.del{width:auto;min-height:36px;color:#dc2626;border:0;background:none}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #ddd;padding-bottom:env(safe-area-inset-bottom)}
+nav button{border:0;border-radius:0;min-height:56px;background:none}nav .on{color:#16a34a;font-weight:700}.page{display:none}.page.show{display:block}
+.bar{height:8px;background:#fecaca;border-radius:4px;margin-top:4px}</style></head><body>
+<header>记账本</header>
+<section id="p-home" class="page show">
+<div class="card"><h3>今日</h3><div class="grid" id="today"></div></div>
+<div class="card"><h3>本月</h3><div class="grid" id="month"></div></div>
+<div class="card"><h3>记一笔</h3>
+<div class="row seg"><button id="tOut" class="on">支出</button><button id="tIn">收入</button></div>
+<div class="row"><input id="amt" type="number" inputmode="decimal" step="0.01" placeholder="金额"></div>
+<div class="row"><select id="cat"></select><input id="date" type="date"></div>
+<div class="row"><input id="note" placeholder="备注（可选）"></div>
+<button class="primary" id="add">保存</button></div>
+<div class="card"><h3>最近记录</h3><div id="recent"></div></div></section>
+<section id="p-sum" class="page"><div class="card"><div class="row"><input type="month" id="mon"></div><div id="sum"></div></div></section>
+<section id="p-set" class="page"><div class="card"><h3>备份（iOS 强烈建议定期导出）</h3>
+<div class="row"><button class="primary" id="exp">导出 JSON</button></div>
+<div class="row"><button id="impBtn">导入 JSON</button><input type="file" id="imp" accept="application/json,.json" hidden></div>
+<small id="store" style="color:#888"></small></div></section>
+<nav><button data-p="home" class="on">首页</button><button data-p="sum">月度汇总</button><button data-p="set">备份</button></nav>
+<script>
+const CATS={out:["餐饮","交通","购物","住房","其他"],in:["工资","其他"]};let type="out",recs=[],useLS=false,db;
+const $=id=>document.getElementById(id),fmt=n=>n.toFixed(2),today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+function openDB(){return new Promise(r=>{try{const q=indexedDB.open("ledger",1);q.onupgradeneeded=()=>q.result.createObjectStore("r",{keyPath:"id"});q.onsuccess=()=>{db=q.result;r()};q.onerror=()=>{useLS=true;r()}}catch(e){useLS=true;r()}})}
+function tx(m){return db.transaction("r",m).objectStore("r")}
+function loadAll(){if(useLS){recs=JSON.parse(localStorage.ledger||"[]");return Promise.resolve()}return new Promise(r=>{const q=tx("readonly").getAll();q.onsuccess=()=>{recs=q.result;r()};q.onerror=()=>{useLS=true;loadAll().then(r)}})}
+function put(x){if(useLS){localStorage.ledger=JSON.stringify(recs);return}tx("readwrite").put(x);localStorage.ledger=JSON.stringify(recs)}
+function del(id){recs=recs.filter(x=>x.id!==id);if(!useLS)tx("readwrite").delete(id);localStorage.ledger=JSON.stringify(recs);render()}
+function tot(list){let i=0,o=0;list.forEach(x=>x.type=="in"?i+=x.amount:o+=x.amount);return`<div>收入<b class="in">${fmt(i)}</b></div><div>支出<b class="out">${fmt(o)}</b></div><div>结余<b>${fmt(i-o)}</b></div>`}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function render(){const t=today(),m=t.slice(0,7);$("today").innerHTML=tot(recs.filter(x=>x.date==t));$("month").innerHTML=tot(recs.filter(x=>x.date.startsWith(m)));
+const s=[...recs].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id).slice(0,30);
+$("recent").innerHTML=s.length?s.map(x=>`<div class="rec"><div>${esc(x.cat)} <small>${x.date} ${esc(x.note||"")}</small></div><div><span class="${x.type}">${x.type=="in"?"+":"-"}${fmt(x.amount)}</span><button class="del" onclick="confirm('删除这条记录？')&&del(${x.id})">删除</button></div></div>`).join(""):"<small>暂无记录</small>";renderSum()}
+function renderSum(){const m=$("mon").value,l=recs.filter(x=>x.date.startsWith(m));let h=`<div class="grid" style="margin-bottom:10px">${tot(l)}</div>`;
+["out","in"].forEach(ty=>{const g={};l.filter(x=>x.type==ty).forEach(x=>g[x.cat]=(g[x.cat]||0)+x.amount);const max=Math.max(1,...Object.values(g));
+h+=`<h3>${ty=="out"?"支出":"收入"}分类</h3>`+(Object.keys(g).length?Object.entries(g).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`<div style="margin-bottom:8px">${c} <span class="${ty}" style="float:right">${fmt(v)}</span><div class="bar" style="width:${v/max*100}%;background:${ty=="in"?"#bbf7d0":"#fecaca"}"></div></div>`).join(""):"<small>无</small><br><br>")});$("sum").innerHTML=h}
+function setType(t){type=t;$("tOut").classList.toggle("on",t=="out");$("tIn").classList.toggle("on",t=="in");$("cat").innerHTML=CATS[t].map(c=>`<option>${c}</option>`).join("")}
+$("tOut").onclick=()=>setType("out");$("tIn").onclick=()=>setType("in");
+$("add").onclick=()=>{const a=parseFloat($("amt").value);if(!(a>0))return alert("请输入金额");const x={id:Date.now(),type,amount:Math.round(a*100)/100,cat:$("cat").value,note:$("note").value.trim(),date:$("date").value||today()};recs.push(x);put(x);$("amt").value="";$("note").value="";render()};
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(n=>n.classList.toggle("on",n==b));document.querySelectorAll(".page").forEach(p=>p.classList.toggle("show",p.id=="p-"+b.dataset.p))});
+$("mon").onchange=renderSum;
+$("exp").onclick=async()=>{const txt=JSON.stringify({app:"ledger",version:1,exported:new Date().toISOString(),records:recs},null,1),name=`记账备份-${today()}.json`,f=new File([txt],name,{type:"application/json"});
+if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){if(e.name=="AbortError")return}}const a=document.createElement("a");a.href=URL.createObjectURL(f);a.download=name;a.click()};
+$("impBtn").onclick=()=>$("imp").click();
+$("imp").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t),l=Array.isArray(d)?d:d.records;if(!Array.isArray(l))throw 0;const ids=new Set(recs.map(x=>x.id));let n=0;l.forEach(x=>{if(x&&x.id&&x.amount&&!ids.has(x.id)){recs.push(x);put(x);n++}});alert(`已导入 ${n} 条`);render()}catch(_){alert("文件格式不正确")}});e.target.value=""};
+(async()=>{$("date").value=today();$("mon").value=today().slice(0,7);setType("out");await openDB();await loadAll();if(!recs.length&&localStorage.ledger){recs=JSON.parse(localStorage.ledger);if(!useLS)recs.forEach(x=>tx("readwrite").put(x))}
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();$("store").textContent="存储方式："+(useLS?"localStorage":"IndexedDB（并镜像 localStorage）");render();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js")})();
+</script></body></html>
